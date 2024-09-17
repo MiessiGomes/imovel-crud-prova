@@ -1,13 +1,11 @@
 using Microsoft.EntityFrameworkCore;
-using System.IO;
 
 public class ImovelContext : DbContext
 {
+    public ImovelContext(DbContextOptions<ImovelContext> options) : base(options) { }
+
     public DbSet<Imovel> Imoveis { get; set; }
     public DbSet<Comodo> Comodos { get; set; }
-
-    protected override void OnConfiguring(DbContextOptionsBuilder options)
-        => options.UseSqlite($"Data Source={Path.Combine(Directory.GetCurrentDirectory(), "imoveis.db")}");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -15,5 +13,8 @@ public class ImovelContext : DbContext
             .HasMany(i => i.Comodos)
             .WithOne(c => c.Imovel)
             .HasForeignKey(c => c.ImovelId);
+
+        modelBuilder.Entity<Imovel>().ToTable("Imoveis");
+        modelBuilder.Entity<Comodo>().ToTable("Comodos");
     }
 }

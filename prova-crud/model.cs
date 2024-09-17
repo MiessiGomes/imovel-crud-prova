@@ -1,5 +1,8 @@
+using System.ComponentModel.DataAnnotations;
+
 public class Imovel
 {
+    [Key]
     public int Id { get; set; }
     public string Descricao { get; set; }
     public DateTime DataCompra { get; set; }
@@ -9,6 +12,7 @@ public class Imovel
 
 public class Comodo
 {
+    [Key]
     public int Id { get; set; }
     public string Nome { get; set; }
     public int ImovelId { get; set; }

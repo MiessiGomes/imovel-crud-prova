@@ -1,158 +1,153 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
-class Program
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<ImovelContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddCors(options =>
 {
-    static void Main(string[] args)
-    {
-        using (var context = new ImovelContext())
+    options.AddPolicy("AllowAll",
+        builder =>
         {
-            context.Database.EnsureCreated();
+            builder.AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+        });
+});
 
-            while (true)
-            {
-                Console.WriteLine("\n1. Adicionar um Imóvel");
-                Console.WriteLine("2. Listar Imóveis Adicionados");
-                Console.WriteLine("3. Atualizar um Imóvel");
-                Console.WriteLine("4. Excluir um Imóvel");
-                Console.WriteLine("5. Adicionar Cômodo ao Imóvel");
-                Console.WriteLine("6. Sair");
-                Console.Write("Escolhe uma opção aí parceiro: ");
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Imoveis API", Version = "v1" });
+});
 
-                string opcao = Console.ReadLine();
 
-                switch (opcao)
-                {
-                    case "1":
-                        AdicionarImovel(context);
-                        break;
-                    case "2":
-                        ListarImoveis(context);
-                        break;
-                    case "3":
-                        AtualizarImovel(context);
-                        break;
-                    case "4":
-                        ExcluirImovel(context);
-                        break;
-                    case "5":
-                        AdicionarComodo(context);
-                        break;
-                    case "6":
-                        return;
-                    default:
-                        Console.WriteLine("Opção inválida.");
-                        break;
-                }
-            }
-        }
-    }
 
-    static void AdicionarImovel(ImovelContext context)
-    {
-        Console.Write("Descrição: ");
-        string descricao = Console.ReadLine();
-        
-        Console.Write("Data da Compra (dd/mm/aaaa): ");
-        DateTime dataCompra = DateTime.Parse(Console.ReadLine());
-        
-        Console.Write("Endereço: ");
-        string endereco = Console.ReadLine();
+var app = builder.Build();
 
-        var imovel = new Imovel
-        {
-            Descricao = descricao,
-            DataCompra = dataCompra,
-            Endereco = endereco
-        };
 
-        context.Imoveis.Add(imovel);
-        context.SaveChanges();
-        Console.WriteLine("Imóvel adicionado com sucesso.");
-    }
-
-    static void ListarImoveis(ImovelContext context)
-    {
-        var imoveis = context.Imoveis.Include(i => i.Comodos).ToList();
-        foreach (var imovel in imoveis)
-        {
-            Console.WriteLine($"ID: {imovel.Id}, " +
-                              $"Descrição: {imovel.Descricao}, " +
-                              $"Data da Compra: {imovel.DataCompra:dd/MM/yyyy}, " +
-                              $"Endereço: {imovel.Endereco}");
-            Console.WriteLine("Cômodos:");
-            foreach (var comodo in imovel.Comodos)
-            {
-                Console.WriteLine($"  - {comodo.Nome}");
-            }
-            Console.WriteLine();
-        }
-    }
-
-    static void AtualizarImovel(ImovelContext context)
-    {
-        Console.Write("ID do Imóvel a ser atualizado: ");
-        int id = int.Parse(Console.ReadLine());
-
-        var imovel = context.Imoveis.Find(id);
-        if (imovel == null)
-        {
-            Console.WriteLine("Imóvel não encontrado.");
-            return;
-        }
-
-        Console.Write("Nova Descrição: ");
-        imovel.Descricao = Console.ReadLine();
-        
-        Console.Write("Nova Data da Compra (dd/mm/aaaa): ");
-        imovel.DataCompra = DateTime.Parse(Console.ReadLine());
-        
-        Console.Write("Novo Endereço: ");
-        imovel.Endereco = Console.ReadLine();
-
-        context.SaveChanges();
-        Console.WriteLine("Imóvel atualizado com sucesso.");
-    }
-
-    static void ExcluirImovel(ImovelContext context)
-    {
-        Console.Write("ID do Imóvel a ser excluído: ");
-        int id = int.Parse(Console.ReadLine());
-
-        var imovel = context.Imoveis.Find(id);
-        if (imovel == null)
-        {
-            Console.WriteLine("Imóvel não encontrado.");
-            return;
-        }
-
-        context.Imoveis.Remove(imovel);
-        context.SaveChanges();
-        Console.WriteLine("Imóvel excluído com sucesso.");
-    }
-
-    static void AdicionarComodo(ImovelContext context)
-    {
-        Console.Write("ID do Imóvel para adicionar o cômodo: ");
-        int imovelId = int.Parse(Console.ReadLine());
-
-        var imovel = context.Imoveis.Find(imovelId);
-        if (imovel == null)
-        {
-            Console.WriteLine("Imóvel não encontrado.");
-            return;
-        }
-
-        Console.Write("Nome do Cômodo: ");
-        string nome = Console.ReadLine();
-
-        var comodo = new Comodo
-        {
-            Nome = nome,
-            ImovelId = imovelId
-        };
-
-        context.Comodos.Add(comodo);
-        context.SaveChanges();
-        Console.WriteLine("Cômodo adicionado com sucesso.");
-    }
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Imoveis API v1"));
 }
+
+app.UseCors("AllowAll");
+
+app.UseHttpsRedirection();
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next(context);
+    }
+    catch (Exception ex)
+    {
+        context.Response.StatusCode = 500;
+        await context.Response.WriteAsJsonAsync(new { error = ex.Message });
+    }
+});
+
+
+app.MapGet("/imoveis", async (ImovelContext db) =>
+{
+    var imoveis = await db.Imoveis.ToListAsync();
+    return Results.Ok(imoveis);
+})
+.WithName("GetImoveis")
+.WithOpenApi();
+
+
+app.MapGet("/imoveis/{id}", async (int id, ImovelContext db) =>
+    await db.Imoveis.FindAsync(id)
+        is Imovel imovel
+            ? Results.Ok(imovel)
+            : Results.NotFound())
+.WithName("GetImovel")
+.WithOpenApi();
+
+
+app.MapPost("/imoveis", async (Imovel imovel, ImovelContext db) =>
+{
+    db.Imoveis.Add(imovel);
+    await db.SaveChangesAsync();
+    return Results.Created($"/imoveis/{imovel.Id}", imovel);
+})
+.WithName("CreateImovel")
+.WithOpenApi();
+
+
+app.MapPut("/imoveis/{id}", async (int id, Imovel inputImovel, ImovelContext db) =>
+{
+    var imovel = await db.Imoveis.FindAsync(id);
+
+    if (imovel is null) return Results.NotFound();
+
+    imovel.Descricao = inputImovel.Descricao;
+    imovel.DataCompra = inputImovel.DataCompra;
+    imovel.Endereco = inputImovel.Endereco;
+
+    await db.SaveChangesAsync();
+
+    return Results.NoContent();
+})
+.WithName("UpdateImovel")
+.WithOpenApi();
+
+
+app.MapDelete("/imoveis/{id}", async (int id, ImovelContext db) =>
+{
+    if (await db.Imoveis.FindAsync(id) is Imovel imovel)
+    {
+        db.Imoveis.Remove(imovel);
+        await db.SaveChangesAsync();
+        return Results.Ok(imovel);
+    }
+
+    return Results.NotFound();
+})
+.WithName("DeleteImovel")
+.WithOpenApi();
+
+
+app.MapPost("/imoveis/{imovelId}/comodos", async (int imovelId, Comodo comodo, ImovelContext db) =>
+{
+    var imovel = await db.Imoveis.FindAsync(imovelId);
+    if (imovel == null) return Results.NotFound("Imóvel não encontrado.");
+
+    comodo.ImovelId = imovelId;
+    db.Comodos.Add(comodo);
+    await db.SaveChangesAsync();
+
+    return Results.Created($"/imoveis/{imovelId}/comodos/{comodo.Id}", comodo);
+})
+.WithName("AddComodo")
+.WithOpenApi();
+
+
+app.MapGet("/imoveis/{imovelId}/comodos", async (int imovelId, ImovelContext db) =>
+{
+    var comodos = await db.Comodos.Where(c => c.ImovelId == imovelId).ToListAsync();
+    return Results.Ok(comodos); 
+})
+.WithName("GetComodos")
+.WithOpenApi();
+
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var context = services.GetRequiredService<ImovelContext>();
+    context.Database.EnsureCreated();
+}
+
+
+app.Run();
